@@ -14,7 +14,9 @@ from typing import List, Dict, Any
 
 from evolvability.functions import (
     MonotoneConjunction, 
-    MonotoneDisjunction, 
+    MonotoneDisjunction,
+    GeneralConjunction,
+    GeneralDisjunction,
     Parity, 
     Majority
 )
@@ -23,7 +25,10 @@ from evolvability.evolve import EvolutionaryAlgorithm, run_experiment
 from evolvability.utils.visualization import (
     plot_fitness_history, 
     plot_experiment_results, 
-    plot_comparison
+    plot_comparison,
+    plot_fitness_over_generations,
+    plot_mutation_counts,
+    plot_mutation_comparison
 )
 from evolvability.utils.io import (
     save_results_json, 
@@ -38,7 +43,14 @@ def parse_args():
     parser.add_argument(
         '--function-classes', 
         nargs='+',
-        choices=['conjunction', 'disjunction', 'parity', 'majority'],
+        choices=[
+            'conjunction', 
+            'disjunction', 
+            'general_conjunction',
+            'general_disjunction',
+            'parity', 
+            'majority'
+        ],
         default=['conjunction', 'disjunction', 'parity'],
         help='List of function classes to test'
     )
@@ -73,6 +85,13 @@ def parse_args():
     )
     
     parser.add_argument(
+        '--validation-size', 
+        type=int,
+        default=5000,
+        help='Number of examples to use for final validation'
+    )
+    
+    parser.add_argument(
         '--verbose', 
         action='store_true',
         help='Print verbose output'
@@ -92,6 +111,8 @@ def get_function_class(name: str):
     function_classes = {
         'conjunction': MonotoneConjunction,
         'disjunction': MonotoneDisjunction,
+        'general_conjunction': GeneralConjunction,
+        'general_disjunction': GeneralDisjunction,
         'parity': Parity,
         'majority': Majority
     }
@@ -122,6 +143,7 @@ def run_single_experiment(args):
         initial_hypothesis=initial_hypothesis,
         epsilon=args.epsilon,
         sample_size=args.sample_size,
+        validation_size=args.validation_size,
         max_generations=1000,
         stagnation_threshold=50
     )
@@ -136,6 +158,8 @@ def run_single_experiment(args):
     print(f"Generations: {result.generations}")
     print(f"Final fitness: {result.final_fitness:.4f}")
     print(f"Final hypothesis: {result.final_hypothesis}")
+    print(f"Beneficial mutations: {result.beneficial_mutations}")
+    print(f"Neutral mutations: {result.neutral_mutations}")
     
     # Plot fitness history
     results_dir = create_results_dir("single_experiment")
@@ -165,6 +189,8 @@ def run_full_experiments(args):
             n_values=args.n_values,
             num_trials=args.trials,
             epsilon=args.epsilon,
+            sample_size=args.sample_size,
+            validation_size=args.validation_size,
             verbose=args.verbose
         )
         
@@ -176,7 +202,7 @@ def run_full_experiments(args):
             f"{results_dir}/{function_class.__name__}_results.json"
         )
         
-        # Plot individual results
+        # Plot individual results - standard metrics
         plot_experiment_results(
             results,
             metric='success_rates',
@@ -188,8 +214,21 @@ def run_full_experiments(args):
             metric='avg_generations',
             save_path=f"{results_dir}/{function_class.__name__}_generations.png"
         )
+        
+        # Plot new metrics - fitness over generations and mutation counts
+        plot_fitness_over_generations(
+            results,
+            title=f"Fitness over Generations for {function_class.__name__}",
+            save_path=f"{results_dir}/{function_class.__name__}_fitness_over_generations.png"
+        )
+        
+        plot_mutation_counts(
+            results,
+            title=f"Mutation Counts for {function_class.__name__}",
+            save_path=f"{results_dir}/{function_class.__name__}_mutation_counts.png"
+        )
     
-    # Plot comparisons
+    # Plot comparisons - standard metrics
     plot_comparison(
         all_results,
         metric='success_rates',
@@ -202,6 +241,30 @@ def run_full_experiments(args):
         metric='avg_generations',
         title="Average Generations Comparison",
         save_path=f"{results_dir}/comparison_generations.png"
+    )
+    
+    # Plot comparisons - new metrics
+    plot_comparison(
+        all_results,
+        metric='avg_beneficial_mutations',
+        title="Beneficial Mutations Comparison",
+        save_path=f"{results_dir}/comparison_beneficial_mutations.png"
+    )
+    
+    plot_comparison(
+        all_results,
+        metric='avg_neutral_mutations',
+        title="Neutral Mutations Comparison",
+        save_path=f"{results_dir}/comparison_neutral_mutations.png"
+    )
+    
+    # Plot mutation comparison for a specific problem size (middle one)
+    middle_n = args.n_values[len(args.n_values) // 2]
+    plot_mutation_comparison(
+        all_results,
+        n_value=middle_n,
+        title=f"Mutation Types Comparison (n={middle_n})",
+        save_path=f"{results_dir}/mutation_types_n{middle_n}.png"
     )
     
     return all_results

@@ -17,6 +17,9 @@ class EvolutionResult:
     final_fitness: float  # Final fitness
     fitness_history: List[float]  # Fitness values throughout evolution
     elapsed_time: float  # Time taken for evolution
+    beneficial_mutations: int  # Count of beneficial mutations accepted
+    neutral_mutations: int  # Count of neutral mutations accepted
+    mutation_history: List[str]  # History of mutation types (beneficial/neutral/none)
 
 
 class EvolutionaryAlgorithm:
@@ -29,6 +32,7 @@ class EvolutionaryAlgorithm:
                  initial_hypothesis: BooleanFunction,
                  epsilon: float = 0.05,
                  sample_size: int = 1000,
+                 validation_size: int = 5000,
                  max_generations: int = 1000,
                  stagnation_threshold: int = 50):
         """
@@ -38,16 +42,23 @@ class EvolutionaryAlgorithm:
             environment: The environment that provides examples and evaluates fitness
             initial_hypothesis: The starting hypothesis
             epsilon: Target error threshold (evolution succeeds if error < epsilon)
-            sample_size: Number of examples to use for fitness evaluation
+            sample_size: Number of examples to use for fitness evaluation during evolution
+            validation_size: Number of examples to use for final validation
             max_generations: Maximum number of generations to run
-            stagnation_threshold: Number of generations with no improvement before stopping
+            stagnation_threshold: Number of generations with no accepted mutation before stopping
         """
         self.environment = environment
         self.current_hypothesis = initial_hypothesis
         self.epsilon = epsilon
         self.sample_size = sample_size
+        self.validation_size = validation_size
         self.max_generations = max_generations
         self.stagnation_threshold = stagnation_threshold
+        
+        # Mutation statistics
+        self.beneficial_mutations = 0
+        self.neutral_mutations = 0
+        self.mutation_history = []
         
         # Validation
         if not isinstance(initial_hypothesis.n, int) or initial_hypothesis.n <= 0:
@@ -98,34 +109,53 @@ class EvolutionaryAlgorithm:
             # Evaluate all candidates and find the best
             best_fitness = current_fitness  # Start with current fitness (allow neutrality)
             best_hypothesis = self.current_hypothesis
+            improvement_found = False
+            accepted_neutral = False
             
             for candidate in candidates:
                 candidate_fitness = self.environment.evaluate_fitness(
                     candidate, self.sample_size)
                 
-                # Select candidate if it's better (or equal, allowing neutral drift)
-                if candidate_fitness >= best_fitness:
-                    # In case of a tie, flip a coin to decide
-                    if candidate_fitness == best_fitness and np.random.random() < 0.5:
-                        continue
+                # Select candidate if it's better
+                if candidate_fitness > best_fitness:
                     best_fitness = candidate_fitness
                     best_hypothesis = candidate
+                    improvement_found = True
+                # Or if it's equal (neutral) and we decide to accept it
+                elif candidate_fitness == best_fitness and candidate is not self.current_hypothesis:
+                    # In case of a tie, flip a coin to decide
+                    if np.random.random() < 0.5:
+                        best_hypothesis = candidate
+                        accepted_neutral = True
             
-            # Update the current hypothesis
-            improvement = best_fitness - current_fitness
-            self.current_hypothesis = best_hypothesis
-            current_fitness = best_fitness
-            fitness_history.append(current_fitness)
-            
-            # Check for stagnation
-            if improvement <= 0:
+            # Update the current hypothesis if a mutation was accepted
+            mutation_occurred = (best_hypothesis is not self.current_hypothesis)
+            if mutation_occurred:
+                # Record mutation type
+                if improvement_found:
+                    self.beneficial_mutations += 1
+                    self.mutation_history.append("beneficial")
+                elif accepted_neutral:
+                    self.neutral_mutations += 1
+                    self.mutation_history.append("neutral")
+                
+                # Update hypothesis and fitness
+                self.current_hypothesis = best_hypothesis
+                current_fitness = best_fitness
+                
+                # Reset stagnation counter when any mutation is accepted
+                stagnation_counter = 0
+            else:
+                # No mutation was accepted
+                self.mutation_history.append("none")
                 stagnation_counter += 1
                 if stagnation_counter >= self.stagnation_threshold:
                     if verbose:
                         print(f"Stagnation detected after {generation} generations.")
                     break
-            else:
-                stagnation_counter = 0
+            
+            # Record fitness history
+            fitness_history.append(current_fitness)
             
             # Check success condition (fitness >= 1-epsilon)
             if current_fitness >= 1 - self.epsilon:
@@ -138,7 +168,7 @@ class EvolutionaryAlgorithm:
         
         # Final evaluation with a larger sample for more accurate assessment
         final_fitness = self.environment.evaluate_fitness(
-            self.current_hypothesis, self.sample_size * 5)
+            self.current_hypothesis, self.validation_size)
         
         elapsed_time = time.time() - start_time
         
@@ -149,20 +179,26 @@ class EvolutionaryAlgorithm:
             final_hypothesis=self.current_hypothesis,
             final_fitness=final_fitness,
             fitness_history=fitness_history,
-            elapsed_time=elapsed_time
+            elapsed_time=elapsed_time,
+            beneficial_mutations=self.beneficial_mutations,
+            neutral_mutations=self.neutral_mutations,
+            mutation_history=self.mutation_history
         )
         
         if verbose:
             print(f"Evolution completed after {generation} generations.")
             print(f"Final fitness: {final_fitness:.4f}")
             print(f"Success: {result.success}")
+            print(f"Beneficial mutations: {self.beneficial_mutations}")
+            print(f"Neutral mutations: {self.neutral_mutations}")
             print(f"Elapsed time: {elapsed_time:.2f} seconds")
         
         return result
 
 
 def run_experiment(function_class, n_values: List[int], num_trials: int = 10, 
-                   epsilon: float = 0.05, verbose: bool = False) -> Dict[str, Any]:
+                   epsilon: float = 0.05, sample_size: int = 1000,
+                   validation_size: int = 5000, verbose: bool = False) -> Dict[str, Any]:
     """
     Run a full experiment with multiple trials for different problem sizes.
     
@@ -171,6 +207,8 @@ def run_experiment(function_class, n_values: List[int], num_trials: int = 10,
         n_values: List of input sizes to test
         num_trials: Number of trials to run for each configuration
         epsilon: Target error threshold
+        sample_size: Number of examples for fitness evaluation during evolution
+        validation_size: Number of examples for final validation
         verbose: Whether to print progress information
         
     Returns:
@@ -183,8 +221,13 @@ def run_experiment(function_class, n_values: List[int], num_trials: int = 10,
         'n_values': n_values,
         'success_rates': [],
         'avg_generations': [],
-        'avg_times': []
+        'avg_times': [],
+        'avg_beneficial_mutations': [],
+        'avg_neutral_mutations': []
     }
+    
+    # For storing fitness history data for plotting
+    fitness_histories = {n: [] for n in n_values}
     
     for n in n_values:
         if verbose:
@@ -193,13 +236,19 @@ def run_experiment(function_class, n_values: List[int], num_trials: int = 10,
         successes = 0
         total_generations = 0
         total_time = 0
+        total_beneficial = 0
+        total_neutral = 0
         
         for trial in range(num_trials):
             if verbose:
                 print(f"\nTrial {trial+1}/{num_trials} for n={n}")
             
-            # Create a random target function
-            target = function_class(n)
+            # Create target function
+            if function_class.__name__ == 'Majority':
+                # For Majority, use the standard majority threshold (n//2)
+                target = function_class(n, threshold=(n + 1) // 2)
+            else:
+                target = function_class(n)
             
             # Create a random initial hypothesis
             initial_hypothesis = function_class(n)
@@ -210,7 +259,8 @@ def run_experiment(function_class, n_values: List[int], num_trials: int = 10,
                 environment=env,
                 initial_hypothesis=initial_hypothesis,
                 epsilon=epsilon,
-                sample_size=1000,  # Use a reasonable sample size
+                sample_size=sample_size,
+                validation_size=validation_size,
                 max_generations=n * 100,  # Scale with problem size
                 stagnation_threshold=50
             )
@@ -223,6 +273,13 @@ def run_experiment(function_class, n_values: List[int], num_trials: int = 10,
                 successes += 1
             total_generations += result.generations
             total_time += result.elapsed_time
+            total_beneficial += result.beneficial_mutations
+            total_neutral += result.neutral_mutations
+            
+            # Save fitness history for plotting
+            # Pad shorter histories with final value to make them equal length
+            padded_history = result.fitness_history.copy()
+            fitness_histories[n].append(padded_history)
             
             if verbose:
                 print(f"Trial {trial+1} completed. Success: {result.success}")
@@ -231,16 +288,25 @@ def run_experiment(function_class, n_values: List[int], num_trials: int = 10,
         success_rate = successes / num_trials
         avg_generations = total_generations / num_trials
         avg_time = total_time / num_trials
+        avg_beneficial = total_beneficial / num_trials
+        avg_neutral = total_neutral / num_trials
         
         # Store results
         results['success_rates'].append(success_rate)
         results['avg_generations'].append(avg_generations)
         results['avg_times'].append(avg_time)
+        results['avg_beneficial_mutations'].append(avg_beneficial)
+        results['avg_neutral_mutations'].append(avg_neutral)
         
         if verbose:
             print(f"\nResults for n={n}:")
             print(f"Success rate: {success_rate:.2f}")
             print(f"Average generations: {avg_generations:.2f}")
+            print(f"Average beneficial mutations: {avg_beneficial:.2f}")
+            print(f"Average neutral mutations: {avg_neutral:.2f}")
             print(f"Average time: {avg_time:.2f} seconds")
+    
+    # Include fitness histories for plotting
+    results['fitness_histories'] = fitness_histories
     
     return results 

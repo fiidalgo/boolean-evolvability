@@ -45,7 +45,8 @@ def plot_experiment_results(results: Dict[str, Any], metric: str = 'success_rate
         title: Plot title (if None, a default title will be used)
         save_path: If provided, save the figure to this path
     """
-    valid_metrics = {'success_rates', 'avg_generations', 'avg_times'}
+    valid_metrics = {'success_rates', 'avg_generations', 'avg_times', 
+                     'avg_beneficial_mutations', 'avg_neutral_mutations'}
     if metric not in valid_metrics:
         raise ValueError(f"Invalid metric: {metric}. Must be one of {valid_metrics}")
     
@@ -67,10 +68,18 @@ def plot_experiment_results(results: Dict[str, Any], metric: str = 'success_rate
         plt.ylabel('Average Generations')
         if title is None:
             title = f"Average Generations for {results['function_class']} (ε={results['epsilon']})"
-    else:  # avg_times
+    elif metric == 'avg_times':
         plt.ylabel('Average Time (seconds)')
         if title is None:
             title = f"Average Runtime for {results['function_class']} (ε={results['epsilon']})"
+    elif metric == 'avg_beneficial_mutations':
+        plt.ylabel('Average Beneficial Mutations')
+        if title is None:
+            title = f"Average Beneficial Mutations for {results['function_class']} (ε={results['epsilon']})"
+    elif metric == 'avg_neutral_mutations':
+        plt.ylabel('Average Neutral Mutations')
+        if title is None:
+            title = f"Average Neutral Mutations for {results['function_class']} (ε={results['epsilon']})"
     
     plt.title(title)
     plt.grid(True, linestyle='--', alpha=0.7)
@@ -96,7 +105,8 @@ def plot_comparison(results_list: List[Dict[str, Any]], metric: str = 'success_r
         title: Plot title (if None, a default title will be used)
         save_path: If provided, save the figure to this path
     """
-    valid_metrics = {'success_rates', 'avg_generations', 'avg_times'}
+    valid_metrics = {'success_rates', 'avg_generations', 'avg_times',
+                     'avg_beneficial_mutations', 'avg_neutral_mutations'}
     if metric not in valid_metrics:
         raise ValueError(f"Invalid metric: {metric}. Must be one of {valid_metrics}")
     
@@ -123,13 +133,195 @@ def plot_comparison(results_list: List[Dict[str, Any]], metric: str = 'success_r
         plt.ylabel('Average Generations')
         if title is None:
             title = f"Average Generations Comparison (ε={results_list[0]['epsilon']})"
-    else:  # avg_times
+    elif metric == 'avg_times':
         plt.ylabel('Average Time (seconds)')
         if title is None:
             title = f"Average Runtime Comparison (ε={results_list[0]['epsilon']})"
+    elif metric == 'avg_beneficial_mutations':
+        plt.ylabel('Average Beneficial Mutations')
+        if title is None:
+            title = f"Average Beneficial Mutations Comparison (ε={results_list[0]['epsilon']})"
+    elif metric == 'avg_neutral_mutations':
+        plt.ylabel('Average Neutral Mutations')
+        if title is None:
+            title = f"Average Neutral Mutations Comparison (ε={results_list[0]['epsilon']})"
     
     plt.title(title)
     plt.grid(True, linestyle='--', alpha=0.7)
+    plt.legend(loc='best')
+    
+    plt.tight_layout()
+    
+    if save_path:
+        os.makedirs(os.path.dirname(save_path), exist_ok=True)
+        plt.savefig(save_path, dpi=300, bbox_inches='tight')
+        plt.close()
+    else:
+        plt.show()
+
+
+def plot_fitness_over_generations(results: Dict[str, Any], 
+                                  title: Optional[str] = None,
+                                  save_path: Optional[str] = None):
+    """
+    Plot average fitness over generations for each problem size.
+    
+    Args:
+        results: Experiment results dictionary containing fitness_histories
+        title: Plot title (if None, a default title will be used)
+        save_path: If provided, save the figure to this path
+    """
+    if 'fitness_histories' not in results:
+        raise ValueError("Results dictionary must contain 'fitness_histories' key")
+    
+    plt.figure(figsize=(12, 7))
+    
+    # Define a color cycle for different n values
+    colors = plt.cm.tab10.colors
+    
+    # Get maximum length across all histories
+    max_len = 0
+    for n, histories in results['fitness_histories'].items():
+        for history in histories:
+            max_len = max(max_len, len(history))
+    
+    # Plot average fitness history for each n
+    for i, (n, histories) in enumerate(sorted(results['fitness_histories'].items())):
+        if not histories:
+            continue
+            
+        # For each generation, compute average fitness across all trials
+        avg_history = np.zeros(max_len)
+        count = np.zeros(max_len)
+        
+        for history in histories:
+            # Pad history with final value if needed
+            padded = history + [history[-1]] * (max_len - len(history))
+            for j, fitness in enumerate(padded):
+                avg_history[j] += fitness
+                count[j] += 1
+        
+        # Compute average (handling potential division by zero)
+        avg_history = np.divide(avg_history, count, out=np.zeros_like(avg_history), where=count!=0)
+        
+        # Plot this n's average history
+        color = colors[i % len(colors)]
+        plt.plot(range(max_len), avg_history, '-', 
+                 linewidth=2, color=color, label=f'n={n}')
+    
+    plt.xlabel('Generation')
+    plt.ylabel('Average Fitness')
+    
+    # Add horizontal line at y=1-epsilon to show success threshold
+    plt.axhline(y=1-results['epsilon'], color='r', linestyle='--', 
+                alpha=0.5, label=f'Success Threshold (1-ε)')
+    
+    if title is None:
+        title = f"Average Fitness over Generations for {results['function_class']}"
+    plt.title(title)
+    
+    plt.grid(True, linestyle='--', alpha=0.7)
+    plt.legend(loc='best')
+    
+    plt.tight_layout()
+    
+    if save_path:
+        os.makedirs(os.path.dirname(save_path), exist_ok=True)
+        plt.savefig(save_path, dpi=300, bbox_inches='tight')
+        plt.close()
+    else:
+        plt.show()
+
+
+def plot_mutation_counts(results: Dict[str, Any], 
+                         title: Optional[str] = None,
+                         save_path: Optional[str] = None):
+    """
+    Plot beneficial vs. neutral mutation counts for each problem size.
+    
+    Args:
+        results: Experiment results dictionary
+        title: Plot title (if None, a default title will be used)
+        save_path: If provided, save the figure to this path
+    """
+    if 'avg_beneficial_mutations' not in results or 'avg_neutral_mutations' not in results:
+        raise ValueError("Results dictionary must contain mutation count data")
+    
+    plt.figure(figsize=(10, 6))
+    
+    n_values = results['n_values']
+    beneficial = results['avg_beneficial_mutations']
+    neutral = results['avg_neutral_mutations']
+    
+    width = 0.35  # the width of the bars
+    x = np.arange(len(n_values))
+    
+    plt.bar(x - width/2, beneficial, width, label='Beneficial', color='green', alpha=0.7)
+    plt.bar(x + width/2, neutral, width, label='Neutral', color='blue', alpha=0.7)
+    
+    plt.xlabel('Problem Size (n)')
+    plt.ylabel('Average Count per Run')
+    plt.xticks(x, [str(n) for n in n_values])
+    
+    if title is None:
+        title = f"Mutation Counts for {results['function_class']} (ε={results['epsilon']})"
+    plt.title(title)
+    
+    plt.grid(True, linestyle='--', alpha=0.4, axis='y')
+    plt.legend(loc='best')
+    
+    plt.tight_layout()
+    
+    if save_path:
+        os.makedirs(os.path.dirname(save_path), exist_ok=True)
+        plt.savefig(save_path, dpi=300, bbox_inches='tight')
+        plt.close()
+    else:
+        plt.show()
+
+
+def plot_mutation_comparison(results_list: List[Dict[str, Any]],
+                             n_value: int,
+                             title: Optional[str] = None,
+                             save_path: Optional[str] = None):
+    """
+    Compare beneficial vs. neutral mutations across function classes for a specific n value.
+    
+    Args:
+        results_list: List of experiment results dictionaries
+        n_value: Problem size to compare
+        title: Plot title (if None, a default title will be used)
+        save_path: If provided, save the figure to this path
+    """
+    plt.figure(figsize=(12, 7))
+    
+    function_classes = [results['function_class'] for results in results_list]
+    beneficial = []
+    neutral = []
+    
+    for results in results_list:
+        if n_value not in results['n_values']:
+            raise ValueError(f"Problem size n={n_value} not found in results for {results['function_class']}")
+        
+        idx = results['n_values'].index(n_value)
+        beneficial.append(results['avg_beneficial_mutations'][idx])
+        neutral.append(results['avg_neutral_mutations'][idx])
+    
+    width = 0.35  # the width of the bars
+    x = np.arange(len(function_classes))
+    
+    plt.bar(x - width/2, beneficial, width, label='Beneficial', color='green', alpha=0.7)
+    plt.bar(x + width/2, neutral, width, label='Neutral', color='blue', alpha=0.7)
+    
+    plt.xlabel('Function Class')
+    plt.ylabel('Average Count per Run')
+    plt.xticks(x, function_classes, rotation=45)
+    
+    if title is None:
+        title = f"Mutation Counts Comparison for n={n_value} (ε={results_list[0]['epsilon']})"
+    plt.title(title)
+    
+    plt.grid(True, linestyle='--', alpha=0.4, axis='y')
     plt.legend(loc='best')
     
     plt.tight_layout()
