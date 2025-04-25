@@ -5,3 +5,6 @@
 *.out
 *.synctex.gz
 *.tex
+
+venv/
+__pycache__/
