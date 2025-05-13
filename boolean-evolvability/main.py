@@ -142,6 +142,7 @@ def run_single_experiment(args):
         environment=env,
         initial_hypothesis=initial_hypothesis,
         epsilon=args.epsilon,
+        tolerance=0.01,  # Use default tolerance
         sample_size=args.sample_size,
         validation_size=args.validation_size,
         max_generations=1000,

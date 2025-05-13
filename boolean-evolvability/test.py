@@ -67,7 +67,7 @@ def test_function_evaluation():
         assert output == expected_outputs[i], f"Parity test failed for input {test_input}"
     
     # Test Majority
-    majority = Majority(5)  # Majority of 5 variables (threshold = 3)
+    majority = Majority(5, relevant_vars=set(range(5)))  # Majority of all 5 variables
     
     test_inputs = [
         np.array([1, 1, 1, 0, 0]),  # 3 ones -> should return 1
@@ -119,6 +119,22 @@ def test_mutation():
     # We expect n mutations (3 in this case)
     # - Remove x1
     # - Add x2
+    # - Add x3
+    assert len(mutations) == n, f"Expected {n} mutations, got {len(mutations)}"
+    
+    # Test Majority mutation
+    relevant_vars = {0, 1}  # Only x1 and x2 are relevant
+    majority = Majority(n, relevant_vars)
+    
+    mutations = majority.mutate()
+    print(f"\n  Original majority: {majority}")
+    print(f"  Number of mutations: {len(mutations)}")
+    for i, mutation in enumerate(mutations):
+        print(f"  Mutation {i+1}: {mutation}")
+    
+    # We expect n mutations (3 in this case)
+    # - Remove x1
+    # - Remove x2
     # - Add x3
     assert len(mutations) == n, f"Expected {n} mutations, got {len(mutations)}"
     
@@ -183,6 +199,7 @@ def test_evolution_simple():
         environment=env,
         initial_hypothesis=initial_hypothesis,
         epsilon=0.05,
+        tolerance=0.01,  # Add tolerance parameter
         sample_size=1000,
         max_generations=100,
         stagnation_threshold=20
@@ -205,9 +222,78 @@ def test_evolution_simple():
     print("Simple evolution test passed!")
 
 
+def test_evolution_with_tolerance():
+    """Test that the tolerance parameter affects mutation selection."""
+    print("Testing evolution with tolerance parameter...")
+    
+    n = 5
+    
+    # Create a target conjunction x1 AND x3
+    target_vars = {0, 2}
+    target = MonotoneConjunction(n, target_vars)
+    print(f"  Target function: {target}")
+    
+    # Create an initial hypothesis with all variables
+    initial_vars = set(range(n))
+    initial_hypothesis = MonotoneConjunction(n, initial_vars)
+    print(f"  Initial hypothesis: {initial_hypothesis}")
+    
+    # Create environment
+    env = Environment(n, target)
+    
+    # Run with zero tolerance (strict improvement only)
+    algo_strict = EvolutionaryAlgorithm(
+        environment=env,
+        initial_hypothesis=initial_hypothesis.mutate()[0],  # Use a mutation to make it different
+        epsilon=0.05,
+        tolerance=0,  # Zero tolerance - only accept strict improvements
+        sample_size=1000,
+        max_generations=50,
+        stagnation_threshold=20
+    )
+    
+    # Run with larger tolerance (more accepting of neutral mutations)
+    algo_tolerant = EvolutionaryAlgorithm(
+        environment=env,
+        initial_hypothesis=initial_hypothesis.mutate()[0],  # Use a mutation to make it different
+        epsilon=0.05,
+        tolerance=0.05,  # Higher tolerance - accept more neutral mutations
+        sample_size=1000,
+        max_generations=50,
+        stagnation_threshold=20
+    )
+    
+    # Run both algorithms
+    print("  Running evolution with zero tolerance...")
+    result_strict = algo_strict.run(verbose=False)
+    
+    print("  Running evolution with higher tolerance...")
+    result_tolerant = algo_tolerant.run(verbose=False)
+    
+    # Print results
+    print("\n  Results with zero tolerance:")
+    print(f"  Success: {result_strict.success}")
+    print(f"  Generations: {result_strict.generations}")
+    print(f"  Beneficial mutations: {result_strict.beneficial_mutations}")
+    print(f"  Neutral mutations: {result_strict.neutral_mutations}")
+    
+    print("\n  Results with higher tolerance:")
+    print(f"  Success: {result_tolerant.success}")
+    print(f"  Generations: {result_tolerant.generations}")
+    print(f"  Beneficial mutations: {result_tolerant.beneficial_mutations}")
+    print(f"  Neutral mutations: {result_tolerant.neutral_mutations}")
+    
+    # We expect more neutral mutations with higher tolerance
+    print("\n  Tolerance test outcome:")
+    print(f"  Neutral mutations ratio - Strict: {result_strict.neutral_mutations/(result_strict.beneficial_mutations+result_strict.neutral_mutations+0.001):.2f}, Tolerant: {result_tolerant.neutral_mutations/(result_tolerant.beneficial_mutations+result_tolerant.neutral_mutations+0.001):.2f}")
+    
+    print("Evolution with tolerance test completed!")
+
+
 if __name__ == "__main__":
     # Run tests
     test_function_evaluation()
     test_mutation()
     test_environment()
-    test_evolution_simple() 
+    test_evolution_simple()
+    test_evolution_with_tolerance() 

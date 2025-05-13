@@ -488,28 +488,38 @@ class Parity(BooleanFunction):
 
 class Majority(BooleanFunction):
     """
-    Majority function: Returns 1 if at least threshold of the inputs are 1.
+    Majority function: Returns 1 if a majority of the variables in a relevance set are 1.
+    This aligns with Valiant's framework by using a representation with small step mutations.
     """
     
-    def __init__(self, n: int, threshold: Optional[int] = None):
+    def __init__(self, n: int, relevant_vars: Optional[Set[int]] = None, threshold: Optional[int] = None):
         """
         Initialize a majority function.
         
         Args:
             n: Number of input variables
-            threshold: Threshold value. If None, will be set to a random value in [0,n]
+            relevant_vars: Set of indices (0-based) of variables that are relevant to the function.
+                If None, all variables are considered relevant.
+            threshold: Threshold for majority. If None, it will be set to (len(relevant_vars) + 1) // 2
         """
         super().__init__(n)
-        # If no threshold provided, select a random value between 0 and n (inclusive)
+        
+        # If no relevant variables provided, use all variables
+        if relevant_vars is None:
+            self.relevant_vars = set(range(n))
+        else:
+            self.relevant_vars = relevant_vars
+        
+        # Set threshold to be majority of relevant variables
         if threshold is None:
-            self.threshold = np.random.randint(0, n+1)
+            self.threshold = (len(self.relevant_vars) + 1) // 2
         else:
             self.threshold = threshold
     
     def evaluate(self, x) -> int:
         """
         Evaluate the majority function on input x.
-        Returns 1 if at least threshold inputs are 1, otherwise 0.
+        Returns 1 if at least threshold of the relevant inputs are 1, otherwise 0.
         
         Args:
             x: Input binary vector of length n
@@ -517,28 +527,53 @@ class Majority(BooleanFunction):
         Returns:
             0 or 1
         """
-        return 1 if np.sum(x) >= self.threshold else 0
+        # If no relevant variables, default to 0
+        if not self.relevant_vars:
+            return 0
+            
+        # Count 1s only in relevant variables
+        count = sum(x[i] for i in self.relevant_vars)
+        return 1 if count >= self.threshold else 0
     
     def mutate(self) -> List['Majority']:
         """
-        Generate mutations of the threshold function by adjusting the threshold.
-        Mutations can increase or decrease the threshold by 1, within valid bounds.
+        Generate all possible single-step mutations of this majority function.
+        Mutations can add or remove one variable from the relevant set.
         
         Returns:
             List of mutated majority functions
         """
         mutations = []
         
-        # Add a mutation that increases the threshold (if possible)
-        if self.threshold < self.n:
-            mutations.append(Majority(self.n, self.threshold + 1))
+        # For each variable currently relevant, create a mutation that removes it
+        for i in self.relevant_vars:
+            new_vars = self.relevant_vars.copy()
+            new_vars.remove(i)
+            
+            # Adjust threshold if necessary to maintain majority semantics
+            new_threshold = min(self.threshold, (len(new_vars) + 1) // 2)
+            if new_threshold == 0 and new_vars:  # Edge case
+                new_threshold = 1
+                
+            mutations.append(Majority(self.n, new_vars, new_threshold))
         
-        # Add a mutation that decreases the threshold (if possible)
-        if self.threshold > 0:
-            mutations.append(Majority(self.n, self.threshold - 1))
+        # For each variable not relevant, create a mutation that adds it
+        for i in range(self.n):
+            if i not in self.relevant_vars:
+                new_vars = self.relevant_vars.copy()
+                new_vars.add(i)
+                
+                # Adjust threshold to maintain majority semantics
+                new_threshold = (len(new_vars) + 1) // 2
+                
+                mutations.append(Majority(self.n, new_vars, new_threshold))
         
         return mutations
     
     def __str__(self) -> str:
         """String representation of the majority function."""
-        return f"Threshold({self.n}, t={self.threshold})" 
+        if not self.relevant_vars:
+            return "MAJORITY(∅)"
+        
+        vars_str = ", ".join(f"x{i+1}" for i in sorted(self.relevant_vars))
+        return f"MAJORITY({vars_str}, t={self.threshold})" 

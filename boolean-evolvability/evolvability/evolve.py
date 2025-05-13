@@ -31,6 +31,7 @@ class EvolutionaryAlgorithm:
                  environment: Environment,
                  initial_hypothesis: BooleanFunction,
                  epsilon: float = 0.05,
+                 tolerance: float = 0.01,
                  sample_size: int = 1000,
                  validation_size: int = 5000,
                  max_generations: int = 1000,
@@ -42,6 +43,7 @@ class EvolutionaryAlgorithm:
             environment: The environment that provides examples and evaluates fitness
             initial_hypothesis: The starting hypothesis
             epsilon: Target error threshold (evolution succeeds if error < epsilon)
+            tolerance: Tolerance parameter (t) for determining beneficial/neutral mutations
             sample_size: Number of examples to use for fitness evaluation during evolution
             validation_size: Number of examples to use for final validation
             max_generations: Maximum number of generations to run
@@ -50,6 +52,7 @@ class EvolutionaryAlgorithm:
         self.environment = environment
         self.current_hypothesis = initial_hypothesis
         self.epsilon = epsilon
+        self.tolerance = tolerance
         self.sample_size = sample_size
         self.validation_size = validation_size
         self.max_generations = max_generations
@@ -65,6 +68,8 @@ class EvolutionaryAlgorithm:
             raise ValueError("Number of variables must be a positive integer")
         if not (0 < epsilon < 1):
             raise ValueError("Epsilon must be between 0 and 1")
+        if not (0 < tolerance < 1):
+            raise ValueError("Tolerance must be between 0 and 1")
         if not isinstance(sample_size, int) or sample_size <= 0:
             raise ValueError("Sample size must be a positive integer")
     
@@ -116,13 +121,13 @@ class EvolutionaryAlgorithm:
                 candidate_fitness = self.environment.evaluate_fitness(
                     candidate, self.sample_size)
                 
-                # Select candidate if it's better
-                if candidate_fitness > best_fitness:
+                # Select candidate if it's better by at least tolerance
+                if candidate_fitness >= best_fitness + self.tolerance:
                     best_fitness = candidate_fitness
                     best_hypothesis = candidate
                     improvement_found = True
-                # Or if it's equal (neutral) and we decide to accept it
-                elif candidate_fitness == best_fitness and candidate is not self.current_hypothesis:
+                # Or if it's neutral (not worse than by tolerance) and we decide to accept it
+                elif candidate_fitness >= best_fitness - self.tolerance and candidate is not self.current_hypothesis:
                     # In case of a tie, flip a coin to decide
                     if np.random.random() < 0.5:
                         best_hypothesis = candidate
@@ -197,7 +202,7 @@ class EvolutionaryAlgorithm:
 
 
 def run_experiment(function_class, n_values: List[int], num_trials: int = 10, 
-                   epsilon: float = 0.05, sample_size: int = 1000,
+                   epsilon: float = 0.05, tolerance: float = 0.01, sample_size: int = 1000,
                    validation_size: int = 5000, verbose: bool = False) -> Dict[str, Any]:
     """
     Run a full experiment with multiple trials for different problem sizes.
@@ -207,6 +212,7 @@ def run_experiment(function_class, n_values: List[int], num_trials: int = 10,
         n_values: List of input sizes to test
         num_trials: Number of trials to run for each configuration
         epsilon: Target error threshold
+        tolerance: Tolerance parameter (t) for determining beneficial/neutral mutations
         sample_size: Number of examples for fitness evaluation during evolution
         validation_size: Number of examples for final validation
         verbose: Whether to print progress information
@@ -217,6 +223,7 @@ def run_experiment(function_class, n_values: List[int], num_trials: int = 10,
     results = {
         'function_class': function_class.__name__,
         'epsilon': epsilon,
+        'tolerance': tolerance,
         'trials': num_trials,
         'n_values': n_values,
         'success_rates': [],
@@ -245,13 +252,18 @@ def run_experiment(function_class, n_values: List[int], num_trials: int = 10,
             
             # Create target function
             if function_class.__name__ == 'Majority':
-                # For Majority, use the standard majority threshold (n//2)
-                target = function_class(n, threshold=(n + 1) // 2)
+                # For Majority, use all variables with majority threshold
+                target = function_class(n, relevant_vars=set(range(n)))
             else:
                 target = function_class(n)
             
             # Create a random initial hypothesis
-            initial_hypothesis = function_class(n)
+            if function_class.__name__ == 'Majority':
+                # For Majority, start with a random subset of variables
+                random_vars = set(i for i in range(n) if np.random.random() < 0.5)
+                initial_hypothesis = function_class(n, relevant_vars=random_vars)
+            else:
+                initial_hypothesis = function_class(n)
             
             # Create environment and evolutionary algorithm
             env = Environment(n, target)
@@ -259,6 +271,7 @@ def run_experiment(function_class, n_values: List[int], num_trials: int = 10,
                 environment=env,
                 initial_hypothesis=initial_hypothesis,
                 epsilon=epsilon,
+                tolerance=tolerance,
                 sample_size=sample_size,
                 validation_size=validation_size,
                 max_generations=n * 100,  # Scale with problem size
