@@ -331,4 +331,113 @@ def plot_mutation_comparison(results_list: List[Dict[str, Any]],
         plt.savefig(save_path, dpi=300, bbox_inches='tight')
         plt.close()
     else:
+        plt.show()
+
+
+def plot_experiment_type_comparison(standard_results: List[Dict[str, Any]],
+                              distribution_results: List[Dict[str, Any]],
+                              no_neutral_results: List[Dict[str, Any]],
+                              smart_init_results: List[Dict[str, Any]],
+                              function_class: str,
+                              metric: str = 'success_rates',
+                              title: Optional[str] = None, 
+                              save_path: Optional[str] = None):
+    """
+    Plot comparison of the same function class across different experiment types.
+    
+    Args:
+        standard_results: List of standard experiment results
+        distribution_results: List of distribution experiment results
+        no_neutral_results: List of no-neutral-mutation experiment results
+        smart_init_results: List of smart-initialization experiment results
+        function_class: Name of the function class to compare
+        metric: Metric to plot
+        title: Plot title
+        save_path: If provided, save the figure to this path
+    """
+    valid_metrics = {'success_rates', 'avg_generations', 'avg_times',
+                    'avg_beneficial_mutations', 'avg_neutral_mutations'}
+    if metric not in valid_metrics:
+        raise ValueError(f"Invalid metric: {metric}. Must be one of {valid_metrics}")
+    
+    plt.figure(figsize=(12, 7))
+    
+    # Define experiment types and their data
+    experiment_types = [
+        ("Standard", standard_results, 'b'),
+        ("No Neutral", no_neutral_results, 'r'),
+        ("Smart Init", smart_init_results, 'g'),
+    ]
+    
+    # Add distribution experiments if available
+    distribution_labels = {
+        'biased_075': "Biased 0.75",
+        'binomial': "Binomial",
+        'beta': "Beta",
+    }
+    
+    # Track if we found a matching function class
+    found_class = False
+    
+    # Plot standard, no-neutral, and smart-init experiments
+    for label, results_list, color in experiment_types:
+        for results in results_list:
+            if results['function_class'] == function_class:
+                found_class = True
+                plt.plot(results['n_values'], results[metric], 'o-', 
+                         linewidth=2, markersize=8, color=color, label=label)
+                break
+    
+    # Plot distribution experiments with different markers
+    markers = ['s--', '^--', 'v--']  # Square, triangle up, triangle down
+    colors = ['orange', 'purple', 'brown']
+    
+    for i, (dist_name, marker, color) in enumerate(zip(distribution_labels.keys(), markers, colors)):
+        for results in distribution_results:
+            if results['function_class'] == function_class and results.get('dist_name') == dist_name:
+                found_class = True
+                plt.plot(results['n_values'], results[metric], marker, 
+                         linewidth=2, markersize=8, color=color, label=distribution_labels[dist_name])
+                break
+    
+    if not found_class:
+        plt.text(0.5, 0.5, f"No data for {function_class}", 
+                 horizontalalignment='center', verticalalignment='center',
+                 transform=plt.gca().transAxes, fontsize=14)
+    
+    plt.xlabel('Problem Size (n)')
+    
+    if metric == 'success_rates':
+        plt.ylabel('Success Rate')
+        plt.ylim(-0.05, 1.05)
+        if title is None:
+            title = f"Success Rate Comparison for {function_class}"
+    elif metric == 'avg_generations':
+        plt.ylabel('Average Generations')
+        if title is None:
+            title = f"Average Generations Comparison for {function_class}"
+    elif metric == 'avg_times':
+        plt.ylabel('Average Time (seconds)')
+        if title is None:
+            title = f"Average Runtime Comparison for {function_class}"
+    elif metric == 'avg_beneficial_mutations':
+        plt.ylabel('Average Beneficial Mutations')
+        if title is None:
+            title = f"Average Beneficial Mutations Comparison for {function_class}"
+    elif metric == 'avg_neutral_mutations':
+        plt.ylabel('Average Neutral Mutations')
+        if title is None:
+            title = f"Average Neutral Mutations Comparison for {function_class}"
+    
+    plt.title(title)
+    plt.grid(True, linestyle='--', alpha=0.7)
+    plt.legend(loc='best')
+    
+    plt.tight_layout()
+    
+    if save_path:
+        os.makedirs(os.path.dirname(save_path), exist_ok=True)
+        plt.savefig(save_path, dpi=300, bbox_inches='tight')
+        plt.close()
+    else:
         plt.show() 
