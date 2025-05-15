@@ -35,7 +35,8 @@ class EvolutionaryAlgorithm:
                  sample_size: int = 1000,
                  validation_size: int = 5000,
                  max_generations: int = 1000,
-                 stagnation_threshold: int = 50):
+                 stagnation_threshold: int = 50,
+                 allow_neutral_mutations: bool = True):
         """
         Initialize the evolutionary algorithm.
         
@@ -48,6 +49,7 @@ class EvolutionaryAlgorithm:
             validation_size: Number of examples to use for final validation
             max_generations: Maximum number of generations to run
             stagnation_threshold: Number of generations with no accepted mutation before stopping
+            allow_neutral_mutations: Whether to allow neutral mutations or only beneficial ones
         """
         self.environment = environment
         self.current_hypothesis = initial_hypothesis
@@ -57,6 +59,7 @@ class EvolutionaryAlgorithm:
         self.validation_size = validation_size
         self.max_generations = max_generations
         self.stagnation_threshold = stagnation_threshold
+        self.allow_neutral_mutations = allow_neutral_mutations
         
         # Mutation statistics
         self.beneficial_mutations = 0
@@ -127,7 +130,7 @@ class EvolutionaryAlgorithm:
                     best_hypothesis = candidate
                     improvement_found = True
                 # Or if it's neutral (not worse than by tolerance) and we decide to accept it
-                elif candidate_fitness >= best_fitness - self.tolerance and candidate is not self.current_hypothesis:
+                elif self.allow_neutral_mutations and candidate_fitness >= best_fitness - self.tolerance and candidate is not self.current_hypothesis:
                     # In case of a tie, flip a coin to decide
                     if np.random.random() < 0.5:
                         best_hypothesis = candidate

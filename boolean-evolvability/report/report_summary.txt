@@ -1,0 +1,56 @@
+Evolvability Experiments Summary Report
+=====================================
+
+Total experiments analyzed: 33
+
+Standard Experiments
+-----------------
+GeneralConjunction: Success rate: 1.00, Avg generations: 1.0
+GeneralDisjunction: Success rate: 1.00, Avg generations: 1.0
+Majority: Success rate: 0.60, Avg generations: 39.0
+MonotoneConjunction: Success rate: 1.00, Avg generations: 1.0
+MonotoneDisjunction: Success rate: 1.00, Avg generations: 1.0
+Parity: Success rate: 0.00, Avg generations: 465.6
+
+No Neutral Mutations Experiments
+-------------------------------
+GeneralConjunction: Success rate: 1.00, Avg generations: 1.0
+GeneralDisjunction: Success rate: 1.00, Avg generations: 1.0
+Majority: Success rate: 0.00, Avg generations: 72.6
+MonotoneConjunction: Success rate: 1.00, Avg generations: 1.0
+MonotoneDisjunction: Success rate: 1.00, Avg generations: 1.0
+Parity: Success rate: 0.00, Avg generations: 64.6
+
+Smart Initialization Experiments
+------------------------------
+GeneralConjunction: Success rate: 1.00, Avg generations: 1.0
+GeneralDisjunction: Success rate: 1.00, Avg generations: 1.0
+Majority: Success rate: 0.40, Avg generations: 39.2
+MonotoneConjunction: Success rate: 1.00, Avg generations: 1.0
+MonotoneDisjunction: Success rate: 1.00, Avg generations: 1.0
+Parity: Success rate: 0.00, Avg generations: 339.4
+
+Binomial Distribution Experiments
+--------------------------------
+GeneralConjunction: Success rate: 1.00, Avg generations: 1.0
+GeneralDisjunction: Success rate: 1.00, Avg generations: 1.0
+Majority: Success rate: 1.00, Avg generations: 1.0
+MonotoneConjunction: Success rate: 1.00, Avg generations: 1.0
+MonotoneDisjunction: Success rate: 0.40, Avg generations: 46.0
+
+Beta Distribution Experiments
+----------------------------
+GeneralConjunction: Success rate: 1.00, Avg generations: 1.0
+GeneralDisjunction: Success rate: 1.00, Avg generations: 1.0
+Majority: Success rate: 0.20, Avg generations: 1.0
+MonotoneConjunction: Success rate: 1.00, Avg generations: 1.0
+MonotoneDisjunction: Success rate: 1.00, Avg generations: 1.0
+
+Biased 0.75 Distribution Experiments
+-----------------------------------
+GeneralConjunction: Success rate: 1.00, Avg generations: 1.0
+GeneralDisjunction: Success rate: 1.00, Avg generations: 1.0
+Majority: Success rate: 1.00, Avg generations: 1.0
+MonotoneConjunction: Success rate: 1.00, Avg generations: 1.0
+MonotoneDisjunction: Success rate: 1.00, Avg generations: 1.0
+
